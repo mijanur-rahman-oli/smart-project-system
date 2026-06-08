@@ -1,0 +1,309 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "ProjectFlow API",
+    "version": "1.0.0",
+    "description": "REST API for ProjectFlow - Smart Project Collaboration Platform",
+    "contact": {
+      "name": "API Support",
+      "email": "support@projectflow.com",
+      "url": "https://projectflow.com/support"
+    },
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.projectflow.com/v1",
+      "description": "Production server"
+    },
+    {
+      "url": "https://staging-api.projectflow.com/v1",
+      "description": "Staging server"
+    },
+    {
+      "url": "http://localhost:3000/api",
+      "description": "Development server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      },
+      "cookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "auth-token"
+      }
+    },
+    "schemas": {
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "cuid" },
+          "email": { "type": "string", "format": "email" },
+          "name": { "type": "string" },
+          "role": { "type": "string", "enum": ["admin", "project_manager", "team_member"] },
+          "avatarUrl": { "type": "string", "nullable": true },
+          "isActive": { "type": "boolean" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Project": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "cuid" },
+          "name": { "type": "string" },
+          "description": { "type": "string", "nullable": true },
+          "status": { "type": "string", "enum": ["active", "completed", "on_hold"] },
+          "deadline": { "type": "string", "format": "date-time" },
+          "createdBy": { "type": "string", "format": "cuid" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Task": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "cuid" },
+          "projectId": { "type": "string", "format": "cuid" },
+          "title": { "type": "string" },
+          "description": { "type": "string", "nullable": true },
+          "assignedTo": { "type": "string", "format": "cuid", "nullable": true },
+          "createdBy": { "type": "string", "format": "cuid" },
+          "dueDate": { "type": "string", "format": "date-time" },
+          "priority": { "type": "string", "enum": ["high", "medium", "low"] },
+          "status": { "type": "string", "enum": ["todo", "in_progress", "completed"] },
+          "completedAt": { "type": "string", "format": "date-time", "nullable": true },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Comment": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "cuid" },
+          "taskId": { "type": "string", "format": "cuid" },
+          "userId": { "type": "string", "format": "cuid" },
+          "content": { "type": "string" },
+          "richContent": { "type": "object", "nullable": true },
+          "editedAt": { "type": "string", "format": "date-time", "nullable": true },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Notification": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "cuid" },
+          "userId": { "type": "string", "format": "cuid" },
+          "type": { "type": "string" },
+          "title": { "type": "string" },
+          "content": { "type": "string" },
+          "isRead": { "type": "boolean" },
+          "priority": { "type": "string", "enum": ["low", "medium", "high", "urgent"] },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "readAt": { "type": "string", "format": "date-time", "nullable": true }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "enum": [false] },
+          "error": { "type": "string" },
+          "code": { "type": "string" },
+          "details": { "type": "array", "items": { "type": "object" } }
+        }
+      },
+      "SuccessResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "enum": [true] },
+          "data": { "type": "object" },
+          "message": { "type": "string" }
+        }
+      },
+      "PaginatedResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "enum": [true] },
+          "data": { "type": "array" },
+          "pagination": {
+            "type": "object",
+            "properties": {
+              "page": { "type": "integer" },
+              "limit": { "type": "integer" },
+              "total": { "type": "integer" },
+              "totalPages": { "type": "integer" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    { "name": "Authentication", "description": "User authentication endpoints" },
+    { "name": "Projects", "description": "Project management" },
+    { "name": "Tasks", "description": "Task management" },
+    { "name": "Comments", "description": "Comments and discussions" },
+    { "name": "Attachments", "description": "File attachments" },
+    { "name": "Notifications", "description": "User notifications" },
+    { "name": "Analytics", "description": "Dashboard analytics" },
+    { "name": "Search", "description": "Search functionality" },
+    { "name": "Users", "description": "User management" },
+    { "name": "Activity Logs", "description": "System activity tracking" }
+  ],
+  "paths": {
+    "/auth/login": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "User login",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email": { "type": "string", "format": "email" },
+                  "password": { "type": "string" },
+                  "rememberMe": { "type": "boolean", "default": false }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Login successful" },
+          "401": { "description": "Invalid credentials" }
+        }
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "User registration",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "email", "password", "confirmPassword", "agreeToTerms"],
+                "properties": {
+                  "name": { "type": "string", "minLength": 2, "maxLength": 50 },
+                  "email": { "type": "string", "format": "email" },
+                  "password": { "type": "string", "minLength": 8 },
+                  "confirmPassword": { "type": "string" },
+                  "agreeToTerms": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Registration successful" },
+          "409": { "description": "Email already registered" }
+        }
+      }
+    },
+    "/projects": {
+      "get": {
+        "tags": ["Projects"],
+        "summary": "List projects",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } },
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["active", "completed", "on_hold"] } },
+          { "name": "search", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "List of projects" },
+          "401": { "description": "Unauthorized" }
+        }
+      },
+      "post": {
+        "tags": ["Projects"],
+        "summary": "Create project",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "deadline"],
+                "properties": {
+                  "name": { "type": "string", "minLength": 3, "maxLength": 100 },
+                  "description": { "type": "string", "maxLength": 500 },
+                  "deadline": { "type": "string", "format": "date-time" },
+                  "status": { "type": "string", "enum": ["active", "completed", "on_hold"], "default": "active" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Project created" },
+          "403": { "description": "Insufficient permissions" },
+          "409": { "description": "Project name already exists" }
+        }
+      }
+    },
+    "/tasks": {
+      "get": {
+        "tags": ["Tasks"],
+        "summary": "List tasks",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } },
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["todo", "in_progress", "completed"] } },
+          { "name": "priority", "in": "query", "schema": { "type": "string", "enum": ["high", "medium", "low"] } },
+          { "name": "assignedTo", "in": "query", "schema": { "type": "string", "format": "cuid" } },
+          { "name": "search", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "List of tasks" },
+          "401": { "description": "Unauthorized" }
+        }
+      },
+      "post": {
+        "tags": ["Tasks"],
+        "summary": "Create task",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["projectId", "title", "dueDate"],
+                "properties": {
+                  "projectId": { "type": "string", "format": "cuid" },
+                  "title": { "type": "string", "minLength": 3, "maxLength": 200 },
+                  "description": { "type": "string", "maxLength": 2000 },
+                  "assignedTo": { "type": "string", "format": "cuid", "nullable": true },
+                  "dueDate": { "type": "string", "format": "date-time" },
+                  "priority": { "type": "string", "enum": ["high", "medium", "low"], "default": "medium" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Task created" },
+          "409": { "description": "Duplicate task title" }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,495 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ================================
+// ENUMS
+// ================================
+
+enum Role {
+  admin
+  project_manager
+  team_member
+}
+
+enum ProjectStatus {
+  active
+  completed
+  on_hold
+}
+
+enum TaskStatus {
+  todo
+  in_progress
+  completed
+}
+
+enum Priority {
+  high
+  medium
+  low
+}
+
+enum NotificationType {
+  TASK_ASSIGNED
+  TASK_UPDATED
+  TASK_STATUS_CHANGED
+  TASK_DELETED
+  TASK_DUE_SOON
+  TASK_OVERDUE
+  COMMENT_ADDED
+  COMMENT_MENTIONED
+  PROJECT_CREATED
+  PROJECT_UPDATED
+  PROJECT_DELETED
+  MEMBER_ADDED
+  MEMBER_REMOVED
+  ATTACHMENT_UPLOADED
+  DEADLINE_APPROACHING
+  SYSTEM_ALERT
+}
+
+enum NotificationPriority {
+  low
+  medium
+  high
+  urgent
+}
+
+// ================================
+// MODELS
+// ================================
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  name         String
+  role         Role      @default(team_member)
+  avatarUrl    String?   @map("avatar_url")
+  bio          String?
+  isActive     Boolean   @default(true) @map("is_active")
+  lastLoginAt  DateTime? @map("last_login_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  
+  // Relations
+  projectsCreated Project[]                @relation("ProjectCreator")
+  assignedTasks   Task[]                   @relation("TaskAssignee")
+  createdTasks    Task[]                   @relation("TaskCreator")
+  comments        TaskComment[]
+  attachments     TaskAttachment[]
+  notifications   Notification[]
+  activityLogs    ActivityLog[]
+  projectMembers  ProjectMember[]
+  commentReactions CommentReaction[]
+  sentInvitations TeamInvitation[]         @relation("Inviter")
+  workloads       UserWorkload[]
+  widgets         DashboardWidget[]
+  savedSearches   SavedSearch[]
+  searchHistory   SearchHistory[]
+  notificationPreferences NotificationPreference[]
+  notificationDevices NotificationDevice[]
+  
+  @@map("users")
+}
+
+model Project {
+  id          String        @id @default(cuid())
+  name        String
+  description String?
+  status      ProjectStatus @default(active)
+  deadline    DateTime
+  createdBy   String        @map("created_by")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+  
+  // Relations
+  creator     User          @relation("ProjectCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  tasks       Task[]
+  members     ProjectMember[]
+  activityLogs ActivityLog[]
+  invitations TeamInvitation[]
+  teamActivitySummaries TeamActivitySummary[]
+  
+  @@unique([name])
+  @@index([status])
+  @@index([createdBy])
+  @@map("projects")
+}
+
+model ProjectMember {
+  id        String   @id @default(cuid())
+  projectId String   @map("project_id")
+  userId    String   @map("user_id")
+  joinedAt  DateTime @default(now()) @map("joined_at")
+  
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([projectId, userId])
+  @@index([userId])
+  @@index([projectId])
+  @@map("project_members")
+}
+
+model Task {
+  id          String     @id @default(cuid())
+  projectId   String     @map("project_id")
+  title       String
+  description String?    @db.Text
+  assignedTo  String?    @map("assigned_to")
+  createdBy   String     @map("created_by")
+  dueDate     DateTime   @map("due_date")
+  priority    Priority   @default(medium)
+  status      TaskStatus @default(todo)
+  completedAt DateTime?  @map("completed_at")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  
+  // Relations
+  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee    User?      @relation("TaskAssignee", fields: [assignedTo], references: [id])
+  creator     User       @relation("TaskCreator", fields: [createdBy], references: [id])
+  comments    TaskComment[]
+  attachments TaskAttachment[]
+  
+  @@unique([projectId, title])
+  @@index([projectId, status])
+  @@index([assignedTo, status])
+  @@index([dueDate])
+  @@index([priority])
+  @@map("tasks")
+}
+
+model TaskComment {
+  id          String   @id @default(cuid())
+  taskId      String   @map("task_id")
+  userId      String   @map("user_id")
+  content     String   @db.Text
+  richContent Json?    @map("rich_content")
+  editedAt    DateTime? @map("edited_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id])
+  attachments CommentAttachment[]
+  reactions   CommentReaction[]
+  
+  @@index([taskId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("task_comments")
+}
+
+model TaskAttachment {
+  id         String   @id @default(cuid())
+  taskId     String   @map("task_id")
+  fileName   String   @map("file_name")
+  fileUrl    String   @map("file_url")
+  fileSize   Int      @map("file_size")
+  mimeType   String   @map("mime_type")
+  uploadedBy String   @map("uploaded_by")
+  createdAt  DateTime @default(now()) @map("created_at")
+  
+  // Relations
+  task       Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  uploader   User     @relation(fields: [uploadedBy], references: [id])
+  
+  @@index([taskId])
+  @@index([uploadedBy])
+  @@map("task_attachments")
+}
+
+model CommentAttachment {
+  id         String   @id @default(cuid())
+  commentId  String   @map("comment_id")
+  fileUrl    String   @map("file_url")
+  fileName   String   @map("file_name")
+  fileSize   Int      @map("file_size")
+  mimeType   String   @map("mime_type")
+  createdAt  DateTime @default(now()) @map("created_at")
+  
+  // Relations
+  comment    TaskComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  
+  @@index([commentId])
+  @@map("comment_attachments")
+}
+
+model CommentReaction {
+  id         String   @id @default(cuid())
+  commentId  String   @map("comment_id")
+  userId     String   @map("user_id")
+  emoji      String
+  createdAt  DateTime @default(now()) @map("created_at")
+  
+  // Relations
+  comment    TaskComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user       User        @relation(fields: [userId], references: [id])
+  
+  @@unique([commentId, userId, emoji])
+  @@map("comment_reactions")
+}
+
+model Notification {
+  id         String             @id @default(cuid())
+  userId     String             @map("user_id")
+  type       NotificationType
+  title      String
+  content    String             @db.Text
+  metadata   Json?
+  isRead     Boolean            @default(false) @map("is_read")
+  isArchived Boolean            @default(false) @map("is_archived")
+  priority   NotificationPriority @default(medium)
+  createdAt  DateTime           @default(now()) @map("created_at")
+  readAt     DateTime?          @map("read_at")
+  
+  // Relations
+  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, isRead, createdAt(sort: Desc)])
+  @@index([userId, isArchived])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+model NotificationPreference {
+  id           String         @id @default(cuid())
+  userId       String         @map("user_id")
+  type         NotificationType
+  emailEnabled Boolean        @default(true) @map("email_enabled")
+  inAppEnabled Boolean        @default(true) @map("in_app_enabled")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+  
+  // Relations
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, type])
+  @@map("notification_preferences")
+}
+
+model NotificationDevice {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  deviceToken String   @map("device_token")
+  deviceType  String   @map("device_type")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, deviceToken])
+  @@index([userId])
+  @@map("notification_devices")
+}
+
+model NotificationTemplate {
+  id         String   @id @default(cuid())
+  type       NotificationType @unique
+  subject    String
+  body       String   @db.Text
+  htmlBody   String?  @map("html_body") @db.Text
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  
+  @@map("notification_templates")
+}
+
+model ActivityLog {
+  id         String   @id @default(cuid())
+  userId     String?  @map("user_id")
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  oldValues  Json?    @map("old_values")
+  newValues  Json?    @map("new_values")
+  metadata   Json?
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent")
+  createdAt  DateTime @default(now()) @map("created_at")
+  
+  // Relations
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  project    Project? @relation(fields: [entityId], references: [id])
+  
+  @@index([userId])
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([createdAt(sort: Desc)])
+  @@index([entityType, createdAt])
+  @@map("activity_logs")
+}
+
+model ActivityLogRetention {
+  id            String   @id @default(cuid())
+  retentionDays Int      @default(90) @map("retention_days")
+  lastCleanup   DateTime @default(now()) @map("last_cleanup")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  
+  @@map("activity_log_retention")
+}
+
+model TeamInvitation {
+  id         String   @id @default(cuid())
+  projectId  String   @map("project_id")
+  email      String
+  invitedBy  String   @map("invited_by")
+  role       String   @default("team_member")
+  token      String   @unique
+  expiresAt  DateTime @map("expires_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  acceptedAt DateTime? @map("accepted_at")
+  
+  // Relations
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  inviter    User     @relation("Inviter", fields: [invitedBy], references: [id])
+  
+  @@index([token])
+  @@index([email])
+  @@map("team_invitations")
+}
+
+model TeamActivitySummary {
+  id              String   @id @default(cuid())
+  projectId       String   @map("project_id")
+  date            DateTime @map("date")
+  tasksCreated    Int      @default(0) @map("tasks_created")
+  tasksCompleted  Int      @default(0) @map("tasks_completed")
+  commentsAdded   Int      @default(0) @map("comments_added")
+  attachmentsAdded Int     @default(0) @map("attachments_added")
+  activeMembers   Int      @default(0) @map("active_members")
+  createdAt       DateTime @default(now()) @map("created_at")
+  
+  // Relations
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  @@unique([projectId, date])
+  @@index([date])
+  @@map("team_activity_summaries")
+}
+
+model UserWorkload {
+  id             String   @id @default(cuid())
+  userId         String   @map("user_id")
+  weekStart      DateTime @map("week_start")
+  totalTasks     Int      @default(0) @map("total_tasks")
+  completedTasks Int      @default(0) @map("completed_tasks")
+  overdueTasks   Int      @default(0) @map("overdue_tasks")
+  estimatedHours Float?   @map("estimated_hours")
+  loggedHours    Float?   @map("logged_hours")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, weekStart])
+  @@index([weekStart])
+  @@map("user_workloads")
+}
+
+model AnalyticsCache {
+  id         String   @id @default(cuid())
+  cacheKey   String   @unique
+  data       Json
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  
+  @@index([cacheKey])
+  @@index([expiresAt])
+  @@map("analytics_cache")
+}
+
+model DashboardWidget {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  widgetType String   @map("widget_type")
+  title      String
+  position   Int
+  config     Json
+  isVisible  Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  
+  // Relations
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, widgetType])
+  @@index([userId])
+  @@map("dashboard_widgets")
+}
+
+model MetricSnapshot {
+  id         String   @id @default(cuid())
+  metricType String   @map("metric_type")
+  value      Float
+  metadata   Json
+  timestamp  DateTime @default(now())
+  
+  @@index([metricType, timestamp(sort: Desc)])
+  @@index([timestamp])
+  @@map("metric_snapshots")
+}
+
+model SearchHistory {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  query      String
+  filters    Json
+  resultCount Int     @default(0)
+  searchedAt DateTime @default(now()) @map("searched_at")
+  
+  // Relations
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([searchedAt])
+  @@map("search_history")
+}
+
+model SavedSearch {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  name       String
+  query      String
+  filters    Json
+  createdAt  DateTime @default(now()) @map("created_at")
+  
+  // Relations
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, name])
+  @@map("saved_searches")
+}
+
+model SearchIndex {
+  id           String   @id @default(cuid())
+  entityType   String   @map("entity_type")
+  entityId     String   @map("entity_id")
+  title        String
+  content      String   @db.Text
+  metadata     Json
+  searchVector Unsupported("tsvector")? @map("search_vector")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  
+  @@index([entityType])
+  @@index([title])
+  @@index([searchVector], type: Gin, map: "search_index_vector_idx")
+  @@map("search_index")
+}

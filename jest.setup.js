@@ -1,0 +1,26 @@
+// jest.setup.js
+import '@testing-library/jest-dom';
+
+// Mock Next.js router
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: jest.fn(),
+    replace: jest.fn(),
+    prefetch: jest.fn(),
+    back: jest.fn(),
+  }),
+  usePathname: () => '',
+  useSearchParams: () => new URLSearchParams(),
+}));
+
+// Mock next-themes
+jest.mock('next-themes', () => ({
+  useTheme: () => ({
+    theme: 'light',
+    setTheme: jest.fn(),
+  }),
+}));
+
+// Mock environment variables
+process.env.NEXT_PUBLIC_APP_URL = 'http://localhost:3000';
+process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test';
