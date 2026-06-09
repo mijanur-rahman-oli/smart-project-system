@@ -1,6 +1,6 @@
-// src/app/(auth)/register/page.tsx
 'use client';
 
+import { Suspense } from 'react';
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -35,7 +35,8 @@ const registerSchema = z.object({
 
 type RegisterFormData = z.infer<typeof registerSchema>;
 
-export default function RegisterPage() {
+// Separate component that contains the form
+function RegisterForm() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -128,9 +129,11 @@ export default function RegisterPage() {
   };
 
   // Update password strength when password changes
-  useState(() => {
-    setPasswordStrength(calculatePasswordStrength(password || ''));
-  }, [password]);
+  const onPasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newPassword = e.target.value;
+    setPasswordStrength(calculatePasswordStrength(newPassword));
+    register('password').onChange(e);
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-primary/5 p-4">
@@ -205,10 +208,7 @@ export default function RegisterPage() {
                     className="pl-9 pr-9"
                     {...register('password')}
                     disabled={isLoading}
-                    onChange={(e) => {
-                      register('password').onChange(e);
-                      setPasswordStrength(calculatePasswordStrength(e.target.value));
-                    }}
+                    onChange={onPasswordChange}
                   />
                   <button
                     type="button"
@@ -377,5 +377,18 @@ export default function RegisterPage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+// Main export with Suspense boundary
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    }>
+      <RegisterForm />
+    </Suspense>
   );
 }
