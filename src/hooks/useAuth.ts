@@ -3,7 +3,6 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { apiClient } from '@/lib/api/client';
 
 interface User {
   id: string;
@@ -21,8 +20,8 @@ interface AuthState {
   register: (name: string, email: string, password: string, confirmPassword: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   demoLogin: (role: 'admin' | 'project_manager' | 'team_member') => Promise<{ success: boolean; error?: string }>;
-  checkAuth: () => Promise<boolean>;
   setUser: (user: User | null) => void;
+  checkAuth: () => Promise<boolean>;
 }
 
 export const useAuth = create<AuthState>()(
@@ -35,17 +34,33 @@ export const useAuth = create<AuthState>()(
       login: async (email, password, rememberMe) => {
         set({ isLoading: true });
         try {
-          const response = await apiClient.login(email, password, rememberMe);
-          if (response.success && response.data) {
+          const formData = new FormData();
+          formData.append('email', email);
+          formData.append('password', password);
+          formData.append('rememberMe', String(rememberMe));
+          
+          const response = await fetch('/api/auth/login', {
+            method: 'POST',
+            body: formData,
+          });
+          
+          if (response.redirected) {
+            // Login successful, redirect happened
+            set({ isLoading: false });
+            return { success: true };
+          }
+          
+          const data = await response.json();
+          if (data.success) {
             set({ 
-              user: response.data.user, 
+              user: data.data.user, 
               isAuthenticated: true, 
               isLoading: false 
             });
             return { success: true };
           }
           set({ isLoading: false });
-          return { success: false, error: response.error || 'Login failed' };
+          return { success: false, error: data.error || 'Login failed' };
         } catch (error) {
           set({ isLoading: false });
           return { success: false, error: 'An unexpected error occurred' };
@@ -55,13 +70,24 @@ export const useAuth = create<AuthState>()(
       register: async (name, email, password, confirmPassword) => {
         set({ isLoading: true });
         try {
-          const response = await apiClient.register(name, email, password, confirmPassword);
-          if (response.success) {
+          const formData = new FormData();
+          formData.append('name', name);
+          formData.append('email', email);
+          formData.append('password', password);
+          formData.append('confirmPassword', confirmPassword);
+          
+          const response = await fetch('/api/auth/register', {
+            method: 'POST',
+            body: formData,
+          });
+          
+          const data = await response.json();
+          if (data.success) {
             set({ isLoading: false });
             return { success: true };
           }
           set({ isLoading: false });
-          return { success: false, error: response.error || 'Registration failed' };
+          return { success: false, error: data.error || 'Registration failed' };
         } catch (error) {
           set({ isLoading: false });
           return { success: false, error: 'An unexpected error occurred' };
@@ -71,7 +97,7 @@ export const useAuth = create<AuthState>()(
       logout: async () => {
         set({ isLoading: true });
         try {
-          await apiClient.logout();
+          await fetch('/api/auth/logout', { method: 'POST' });
           set({ user: null, isAuthenticated: false, isLoading: false });
           window.location.href = '/login';
         } catch (error) {
@@ -82,21 +108,27 @@ export const useAuth = create<AuthState>()(
       demoLogin: async (role) => {
         set({ isLoading: true });
         try {
-          const response = await apiClient.demoLogin(role);
-          if (response.success && response.data) {
-            set({ 
-              user: response.data.user, 
-              isAuthenticated: true, 
-              isLoading: false 
-            });
+          const response = await fetch('/api/auth/demo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ role }),
+          });
+          
+          if (response.redirected) {
+            set({ isLoading: false });
             return { success: true };
           }
+          
           set({ isLoading: false });
-          return { success: false, error: response.error || 'Demo login failed' };
+          return { success: false, error: 'Demo login failed' };
         } catch (error) {
           set({ isLoading: false });
           return { success: false, error: 'An unexpected error occurred' };
         }
+      },
+
+      setUser: (user) => {
+        set({ user, isAuthenticated: !!user });
       },
 
       checkAuth: async () => {
@@ -117,10 +149,6 @@ export const useAuth = create<AuthState>()(
           return false;
         }
       },
-
-      setUser: (user) => {
-        set({ user, isAuthenticated: !!user });
-      },
     }),
     {
       name: 'auth-storage',
@@ -128,8 +156,3 @@ export const useAuth = create<AuthState>()(
     }
   )
 );
-
-// Initialize auth check on app load
-if (typeof window !== 'undefined') {
-  useAuth.getState().checkAuth();
-}

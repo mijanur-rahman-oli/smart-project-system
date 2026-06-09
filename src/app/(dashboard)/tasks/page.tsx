@@ -2,11 +2,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { 
   PlusIcon, 
   SearchIcon, 
-  FilterIcon, 
   CalendarIcon,
   UserIcon,
   AlertCircleIcon,
@@ -24,18 +23,13 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { 
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format, formatDistanceToNow, isPast, isToday, isThisWeek } from 'date-fns';
 import { toast } from 'sonner';
 import { getTasksAction, updateTaskStatusAction, bulkUpdateTaskStatusAction } from '@/server/actions/task.actions';
-import { cn } from '@/lib/utils';
 
 interface Task {
   id: string;
@@ -65,20 +59,19 @@ interface Task {
 
 export default function TasksPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('list');
   const [selectedTasks, setSelectedTasks] = useState<string[]>([]);
   const [filters, setFilters] = useState({
-    status: searchParams.get('status') || '',
-    priority: searchParams.get('priority') || '',
-    assignedTo: searchParams.get('assignedTo') || '',
-    projectId: searchParams.get('projectId') || '',
-    search: searchParams.get('search') || '',
+    status: 'all',
+    priority: 'all',
+    assignedTo: '',
+    projectId: '',
+    search: '',
     dateRange: {
-      from: searchParams.get('dateFrom') ? new Date(searchParams.get('dateFrom')!) : undefined,
-      to: searchParams.get('dateTo') ? new Date(searchParams.get('dateTo')!) : undefined,
+      from: undefined as Date | undefined,
+      to: undefined as Date | undefined,
     },
   });
   const [sortBy, setSortBy] = useState('dueDate');
@@ -154,8 +147,8 @@ export default function TasksPage() {
 
   const clearFilters = () => {
     setFilters({
-      status: '',
-      priority: '',
+      status: 'all',
+      priority: 'all',
       assignedTo: '',
       projectId: '',
       search: '',
@@ -182,7 +175,7 @@ export default function TasksPage() {
   };
 
   const activeFilterCount = Object.values(filters).filter(v => {
-    if (typeof v === 'string') return v && v !== '';
+    if (typeof v === 'string') return v && v !== 'all' && v !== '';
     if (typeof v === 'object') return v.from || v.to;
     return false;
   }).length;
@@ -287,11 +280,7 @@ export default function TasksPage() {
                   <SelectItem value="completed">Completed</SelectItem>
                 </SelectContent>
               </Select>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setSelectedTasks([])}
-              >
+              <Button variant="ghost" size="sm" onClick={() => setSelectedTasks([])}>
                 <XIcon className="h-4 w-4" />
               </Button>
             </div>
@@ -323,7 +312,7 @@ export default function TasksPage() {
                 <SelectValue placeholder="All Status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Status</SelectItem>
+                <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="todo">To Do</SelectItem>
                 <SelectItem value="in_progress">In Progress</SelectItem>
                 <SelectItem value="completed">Completed</SelectItem>
@@ -339,7 +328,7 @@ export default function TasksPage() {
                 <SelectValue placeholder="All Priority" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Priority</SelectItem>
+                <SelectItem value="all">All Priority</SelectItem>
                 <SelectItem value="high">High</SelectItem>
                 <SelectItem value="medium">Medium</SelectItem>
                 <SelectItem value="low">Low</SelectItem>
@@ -417,21 +406,21 @@ export default function TasksPage() {
           {/* Active Filters Display */}
           {activeFilterCount > 0 && (
             <div className="flex flex-wrap gap-2 pt-2 border-t">
-              {filters.status && (
+              {filters.status && filters.status !== 'all' && (
                 <Badge variant="secondary" className="gap-1">
                   Status: {filters.status}
                   <XIcon 
                     className="h-3 w-3 cursor-pointer" 
-                    onClick={() => setFilters({ ...filters, status: '' })}
+                    onClick={() => setFilters({ ...filters, status: 'all' })}
                   />
                 </Badge>
               )}
-              {filters.priority && (
+              {filters.priority && filters.priority !== 'all' && (
                 <Badge variant="secondary" className="gap-1">
                   Priority: {filters.priority}
                   <XIcon 
                     className="h-3 w-3 cursor-pointer" 
-                    onClick={() => setFilters({ ...filters, priority: '' })}
+                    onClick={() => setFilters({ ...filters, priority: 'all' })}
                   />
                 </Badge>
               )}
@@ -504,29 +493,6 @@ export default function TasksPage() {
           onStatusChange={handleStatusChange}
           onRefresh={fetchTasks}
         />
-      )}
-
-      {/* Pagination */}
-      {pagination.totalPages > 1 && (
-        <div className="flex justify-center gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setPagination({ ...pagination, page: pagination.page - 1 })}
-            disabled={pagination.page === 1}
-          >
-            Previous
-          </Button>
-          <span className="flex items-center px-4 text-sm">
-            Page {pagination.page} of {pagination.totalPages}
-          </span>
-          <Button
-            variant="outline"
-            onClick={() => setPagination({ ...pagination, page: pagination.page + 1 })}
-            disabled={pagination.page === pagination.totalPages}
-          >
-            Next
-          </Button>
-        </div>
       )}
     </div>
   );
@@ -746,3 +712,5 @@ function getStatusColor(status: string) {
     default: return '';
   }
 }
+
+import { cn } from '@/lib/utils';

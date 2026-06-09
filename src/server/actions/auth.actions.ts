@@ -5,10 +5,9 @@ import { z } from 'zod';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/db/prisma';
-import { hashPassword, verifyPassword, validatePasswordStrength } from '@/lib/auth/password';
+import { hashPassword, verifyPassword } from '@/lib/auth/password';
 import { signJWT } from '@/lib/auth/jwt';
 import { loginSchema, registerSchema } from '@/lib/validations/auth.schema';
-import { logActivity } from '@/server/services/activity.service';
 
 export async function loginAction(formData: FormData) {
   const validatedFields = loginSchema.safeParse({
@@ -36,11 +35,13 @@ export async function loginAction(formData: FormData) {
     return { error: 'Invalid credentials' };
   }
 
+  // Update last login
   await prisma.user.update({
     where: { id: user.id },
     data: { lastLoginAt: new Date() },
   });
 
+  // Generate token
   const token = await signJWT({
     userId: user.id,
     email: user.email,
@@ -48,7 +49,10 @@ export async function loginAction(formData: FormData) {
   });
 
   const maxAge = rememberMe ? 60 * 60 * 24 * 7 : 60 * 60 * 24;
-  cookies().set('auth-token', token, {
+  
+  // Set cookie
+  const cookieStore = await cookies();
+  cookieStore.set('auth-token', token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
@@ -56,14 +60,7 @@ export async function loginAction(formData: FormData) {
     path: '/',
   });
 
-  await logActivity({
-    userId: user.id,
-    action: 'USER_LOGIN',
-    entityType: 'user',
-    entityId: user.id,
-    metadata: { email: user.email },
-  });
-
+  // Redirect to dashboard
   redirect('/dashboard');
 }
 
@@ -90,39 +87,25 @@ export async function registerAction(formData: FormData) {
     return { error: 'Email already registered' };
   }
 
-  const passwordValidation = validatePasswordStrength(password);
-  if (!passwordValidation.isValid) {
-    return { error: passwordValidation.errors[0] };
-  }
-
   const hashedPassword = await hashPassword(password);
 
-  const user = await prisma.user.create({
+  await prisma.user.create({
     data: {
       name,
       email,
       passwordHash: hashedPassword,
       role: 'team_member',
+      isActive: true,
     },
-  });
-
-  await logActivity({
-    userId: user.id,
-    action: 'USER_REGISTERED',
-    entityType: 'user',
-    entityId: user.id,
-    metadata: { email: user.email },
   });
 
   redirect('/login?registered=true');
 }
 
 export async function logoutAction() {
-  const session = cookies().get('auth-token');
-  if (session) {
-    cookies().delete('auth-token');
-  }
-  return { success: true, message: 'Logged out successfully' };
+  const cookieStore = await cookies();
+  cookieStore.delete('auth-token');
+  redirect('/login');
 }
 
 export async function demoLoginAction(role: 'admin' | 'project_manager' | 'team_member') {
@@ -159,7 +142,8 @@ export async function demoLoginAction(role: 'admin' | 'project_manager' | 'team_
     role: user.role,
   });
 
-  cookies().set('auth-token', token, {
+  const cookieStore = await cookies();
+  cookieStore.set('auth-token', token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',

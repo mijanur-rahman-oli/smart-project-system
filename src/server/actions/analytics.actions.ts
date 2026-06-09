@@ -31,11 +31,11 @@ export async function getDashboardMetrics(options: { days?: number }) {
       projectFilter = { id: { in: projectIds } };
     }
 
-    // Get projects data
+    // Get projects data with tasks included
     const projects = await prisma.project.findMany({
       where: projectFilter,
       include: {
-        tasks: true,
+        tasks: true,  // Make sure tasks are included
         members: true,
       },
     });
@@ -46,30 +46,31 @@ export async function getDashboardMetrics(options: { days?: number }) {
     const onHoldProjects = projects.filter(p => p.status === 'on_hold').length;
     const projectCompletionRate = totalProjects > 0 ? (completedProjects / totalProjects) * 100 : 0;
 
-    // Get recent projects
+    // Get recent projects with tasks count
     const recentProjects = await prisma.project.findMany({
       where: projectFilter,
       include: {
+        tasks: true,  // Include tasks for progress calculation
         _count: { select: { tasks: true, members: true } },
       },
       orderBy: { createdAt: 'desc' },
       take: 5,
     });
 
-    // Get tasks data
-    const allTasks = projects.flatMap(p => p.tasks);
+    // Get tasks data - FIX: Safe access to tasks
+    const allTasks = projects.flatMap(p => p.tasks || []);
     const totalTasks = allTasks.length;
-    const completedTasks = allTasks.filter(t => t.status === 'completed').length;
-    const inProgressTasks = allTasks.filter(t => t.status === 'in_progress').length;
-    const todoTasks = allTasks.filter(t => t.status === 'todo').length;
+    const completedTasks = allTasks.filter(t => t?.status === 'completed').length;
+    const inProgressTasks = allTasks.filter(t => t?.status === 'in_progress').length;
+    const todoTasks = allTasks.filter(t => t?.status === 'todo').length;
     const now = new Date();
-    const overdueTasks = allTasks.filter(t => new Date(t.dueDate) < now && t.status !== 'completed').length;
+    const overdueTasks = allTasks.filter(t => t?.dueDate && new Date(t.dueDate) < now && t.status !== 'completed').length;
     const taskCompletionRate = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
 
     const tasksByPriority = {
-      high: allTasks.filter(t => t.priority === 'high').length,
-      medium: allTasks.filter(t => t.priority === 'medium').length,
-      low: allTasks.filter(t => t.priority === 'low').length,
+      high: allTasks.filter(t => t?.priority === 'high').length,
+      medium: allTasks.filter(t => t?.priority === 'medium').length,
+      low: allTasks.filter(t => t?.priority === 'low').length,
     };
 
     // Get recent tasks
@@ -86,7 +87,9 @@ export async function getDashboardMetrics(options: { days?: number }) {
     // Get team metrics
     const uniqueMembers = new Set<string>();
     projects.forEach(project => {
-      project.members.forEach(member => uniqueMembers.add(member.userId));
+      if (project.members) {
+        project.members.forEach(member => uniqueMembers.add(member.userId));
+      }
       uniqueMembers.add(project.createdBy);
     });
     
@@ -103,8 +106,8 @@ export async function getDashboardMetrics(options: { days?: number }) {
     });
 
     const memberStats = memberPerformance.map(member => {
-      const tasks = member.assignedTasks;
-      const completed = tasks.filter(t => t.status === 'completed').length;
+      const tasks = member.assignedTasks || [];
+      const completed = tasks.filter(t => t?.status === 'completed').length;
       const total = tasks.length;
       const completionRate = total > 0 ? (completed / total) * 100 : 0;
       
@@ -166,7 +169,7 @@ export async function getDashboardMetrics(options: { days?: number }) {
     endOfWeek.setDate(endOfWeek.getDate() + 7);
     
     const upcomingTasksData = allTasks
-      .filter(t => t.status !== 'completed' && t.dueDate)
+      .filter(t => t?.status !== 'completed' && t?.dueDate)
       .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
       .slice(0, 10)
       .map(task => ({
@@ -178,12 +181,12 @@ export async function getDashboardMetrics(options: { days?: number }) {
       }));
 
     const dueThisWeek = allTasks.filter(t => 
-      t.status !== 'completed' && 
-      t.dueDate && 
+      t?.status !== 'completed' && 
+      t?.dueDate && 
       new Date(t.dueDate) <= endOfWeek
     ).length;
 
-    const noDeadline = allTasks.filter(t => !t.dueDate && t.status !== 'completed').length;
+    const noDeadline = allTasks.filter(t => !t?.dueDate && t?.status !== 'completed').length;
 
     // Get recent activity
     const recentActivity = await prisma.activityLog.findMany({
@@ -193,20 +196,56 @@ export async function getDashboardMetrics(options: { days?: number }) {
       take: 10,
     });
 
-    // Performance metrics
-    const completedTasksWithDates = allTasks.filter(t => t.completedAt && t.createdAt);
-    const averageCompletionTime = completedTasksWithDates.reduce((acc, t) => {
-      const days = (new Date(t.completedAt!).getTime() - new Date(t.createdAt).getTime()) / (1000 * 60 * 60 * 24);
-      return acc + days;
-    }, 0) / (completedTasksWithDates.length || 1);
+    // Performance metrics - FIX: Safe calculation
+    const completedTasksWithDates = allTasks.filter(t => t?.completedAt && t?.createdAt);
+    const averageCompletionTime = completedTasksWithDates.length > 0
+      ? completedTasksWithDates.reduce((acc, t) => {
+          const days = (new Date(t.completedAt!).getTime() - new Date(t.createdAt).getTime()) / (1000 * 60 * 60 * 24);
+          return acc + days;
+        }, 0) / completedTasksWithDates.length
+      : 0;
 
-    const onTimeCompletionRate = allTasks.filter(t => {
-      if (t.status !== 'completed') return false;
-      return new Date(t.completedAt!) <= new Date(t.dueDate);
-    }).length / (allTasks.filter(t => t.status === 'completed').length || 1) * 100;
+    const completedTasksCount = allTasks.filter(t => t?.status === 'completed').length;
+    const onTimeCompletionRate = completedTasksCount > 0
+      ? allTasks.filter(t => {
+          if (t?.status !== 'completed') return false;
+          return new Date(t.completedAt!) <= new Date(t.dueDate);
+        }).length / completedTasksCount * 100
+      : 0;
 
-    const tasksPerMember = totalTasks / (totalMembers || 1);
+    const tasksPerMember = totalMembers > 0 ? totalTasks / totalMembers : 0;
     const velocity = tasksCompletedTimeline.length / (days / 7);
+
+    // Format recent projects safely
+    const formattedRecentProjects = recentProjects.map(p => ({
+      id: p.id,
+      name: p.name,
+      status: p.status,
+      deadline: p.deadline,
+      progress: p._count?.tasks > 0 && p.tasks 
+        ? (p.tasks.filter(t => t?.status === 'completed').length / p._count.tasks) * 100 
+        : 0,
+    }));
+
+    // Format recent tasks safely
+    const formattedRecentTasks = recentTasks.map(t => ({
+      id: t.id,
+      title: t.title,
+      priority: t.priority,
+      status: t.status,
+      dueDate: t.dueDate,
+      projectName: t.project?.name || '',
+      assignee: t.assignee,
+    }));
+
+    // Format recent activity safely
+    const formattedRecentActivity = recentActivity.map(a => ({
+      id: a.id,
+      user: a.user,
+      action: a.action,
+      target: a.metadata?.taskTitle || a.metadata?.projectName || '',
+      createdAt: a.createdAt,
+    }));
 
     return {
       success: true,
@@ -217,15 +256,7 @@ export async function getDashboardMetrics(options: { days?: number }) {
           completed: completedProjects,
           onHold: onHoldProjects,
           completionRate: projectCompletionRate,
-          recentProjects: recentProjects.map(p => ({
-            id: p.id,
-            name: p.name,
-            status: p.status,
-            deadline: p.deadline,
-            progress: p._count.tasks > 0 
-              ? (p.tasks.filter(t => t.status === 'completed').length / p._count.tasks) * 100 
-              : 0,
-          })),
+          recentProjects: formattedRecentProjects,
         },
         tasks: {
           total: totalTasks,
@@ -235,28 +266,14 @@ export async function getDashboardMetrics(options: { days?: number }) {
           overdue: overdueTasks,
           completionRate: taskCompletionRate,
           byPriority: tasksByPriority,
-          recentTasks: recentTasks.map(t => ({
-            id: t.id,
-            title: t.title,
-            priority: t.priority,
-            status: t.status,
-            dueDate: t.dueDate,
-            projectName: t.project.name,
-            assignee: t.assignee,
-          })),
+          recentTasks: formattedRecentTasks,
         },
         team: {
           totalMembers,
           activeMembers,
           averageTasksPerMember,
           topPerformers,
-          recentActivity: recentActivity.map(a => ({
-            id: a.id,
-            user: a.user,
-            action: a.action,
-            target: a.metadata?.taskTitle || a.metadata?.projectName || '',
-            createdAt: a.createdAt,
-          })),
+          recentActivity: formattedRecentActivity,
         },
         timeline: { tasksCreated, tasksCompleted },
         upcoming: { dueThisWeek, overdue: overdueTasks, noDeadline, upcomingTasks: upcomingTasksData },
@@ -313,101 +330,5 @@ export async function getRealTimeMetrics() {
   } catch (error) {
     console.error('Get real-time metrics error:', error);
     return { success: false, error: 'Failed to fetch real-time metrics' };
-  }
-}
-
-export async function getProjectAnalytics(projectId: string) {
-  try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return { success: false, error: 'Unauthorized' };
-    }
-
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      include: {
-        members: { include: { user: true } },
-        tasks: { include: { assignee: true } },
-      },
-    });
-
-    if (!project) {
-      return { success: false, error: 'Project not found' };
-    }
-
-    const hasAccess = project.createdBy === user.id ||
-      project.members.some(m => m.userId === user.id) ||
-      user.role === 'admin';
-
-    if (!hasAccess) {
-      return { success: false, error: 'Access denied' };
-    }
-
-    const tasks = project.tasks;
-    const totalTasks = tasks.length;
-    const completedTasks = tasks.filter(t => t.status === 'completed').length;
-    const inProgressTasks = tasks.filter(t => t.status === 'in_progress').length;
-    const todoTasks = tasks.filter(t => t.status === 'todo').length;
-    const overdueTasks = tasks.filter(t => new Date(t.dueDate) < new Date() && t.status !== 'completed').length;
-    const completionRate = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
-
-    const tasksByPriority = {
-      high: tasks.filter(t => t.priority === 'high').length,
-      medium: tasks.filter(t => t.priority === 'medium').length,
-      low: tasks.filter(t => t.priority === 'low').length,
-    };
-
-    const memberContribution = project.members.map(member => {
-      const memberTasks = tasks.filter(t => t.assignedTo === member.userId);
-      const completed = memberTasks.filter(t => t.status === 'completed').length;
-      return {
-        userId: member.userId,
-        name: member.user.name,
-        avatarUrl: member.user.avatarUrl,
-        totalTasks: memberTasks.length,
-        completedTasks: completed,
-        completionRate: memberTasks.length > 0 ? (completed / memberTasks.length) * 100 : 0,
-      };
-    }).sort((a, b) => b.completionRate - a.completionRate);
-
-    const recentActivity = await prisma.activityLog.findMany({
-      where: { entityType: 'project', entityId: projectId },
-      include: { user: { select: { id: true, name: true, avatarUrl: true } } },
-      orderBy: { createdAt: 'desc' },
-      take: 20,
-    });
-
-    const upcomingTasks = tasks
-      .filter(t => t.status !== 'completed' && t.dueDate)
-      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
-      .slice(0, 10)
-      .map(task => ({
-        id: task.id,
-        title: task.title,
-        dueDate: task.dueDate,
-        priority: task.priority,
-        assignee: task.assignee?.name,
-      }));
-
-    return {
-      success: true,
-      data: {
-        project: {
-          id: project.id,
-          name: project.name,
-          status: project.status,
-          deadline: project.deadline,
-          createdAt: project.createdAt,
-        },
-        metrics: { totalTasks, completedTasks, inProgressTasks, todoTasks, overdueTasks, completionRate },
-        tasksByPriority,
-        memberContribution,
-        recentActivity,
-        upcomingTasks,
-      },
-    };
-  } catch (error) {
-    console.error('Get project analytics error:', error);
-    return { success: false, error: 'Failed to fetch project analytics' };
   }
 }

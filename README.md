@@ -21,7 +21,7 @@ ProjectFlow is a modern, enterprise-grade project management and team collaborat
 - 🌓 **Dark/Light Mode** - Theme switching with system preference
 
 ### Technical Features
-- 🚀 **Next.js 14** - App Router, Server Components, Server Actions
+- 🚀 **Next.js ** - App Router, Server Components, Server Actions
 - 🎨 **Tailwind CSS + Shadcn/ui** - Beautiful, accessible components
 - 📦 **Prisma ORM** - Type-safe database access
 - 🔄 **Real-time Updates** - WebSocket integration with Socket.io

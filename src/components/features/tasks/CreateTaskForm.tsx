@@ -97,7 +97,6 @@ export function CreateTaskForm({ projectId, projectMembers, onSuccess, onCancel 
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-      {/* Title */}
       <div className="space-y-2">
         <Label htmlFor="title">Task Title *</Label>
         <Input
@@ -114,7 +113,6 @@ export function CreateTaskForm({ projectId, projectMembers, onSuccess, onCancel 
         </p>
       </div>
 
-      {/* Description */}
       <div className="space-y-2">
         <Label htmlFor="description">Description</Label>
         <Textarea
@@ -126,7 +124,6 @@ export function CreateTaskForm({ projectId, projectMembers, onSuccess, onCancel 
         />
       </div>
 
-      {/* Assignee & Priority */}
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="assignedTo">Assign To</Label>
@@ -187,7 +184,6 @@ export function CreateTaskForm({ projectId, projectMembers, onSuccess, onCancel 
         </div>
       </div>
 
-      {/* Due Date */}
       <div className="space-y-2">
         <Label>Due Date *</Label>
         <Popover>
@@ -219,7 +215,6 @@ export function CreateTaskForm({ projectId, projectMembers, onSuccess, onCancel 
         )}
       </div>
 
-      {/* Actions */}
       <div className="flex gap-2 pt-4">
         {onCancel && (
           <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>

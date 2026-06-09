@@ -6,24 +6,20 @@ import { useRouter } from 'next/navigation';
 import { 
   UsersIcon, 
   SearchIcon, 
-  FilterIcon, 
-  MailIcon,
   UserPlusIcon,
+  MailIcon,
   MoreVerticalIcon,
   StarIcon,
   ShieldIcon,
   UserIcon,
-  ActivityIcon,
-  CheckCircleIcon,
-  ClockIcon
+  ActivityIcon
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Progress } from '@/components/ui/progress';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,7 +36,6 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { getUsersAction, updateUserRoleAction, inviteUserAction } from '@/server/actions/user.actions';
@@ -99,11 +94,12 @@ export default function MembersPage() {
     }
 
     setIsInviting(true);
+    const formData = new FormData();
+    formData.append('email', inviteEmail);
+    formData.append('role', inviteRole);
+    
     try {
-      const result = await inviteUserAction({
-        email: inviteEmail,
-        role: inviteRole,
-      });
+      const result = await inviteUserAction(formData);
       if (result.success) {
         toast.success(result.message);
         setInviteEmail('');
@@ -183,7 +179,7 @@ export default function MembersPage() {
             <DialogHeader>
               <DialogTitle>Invite Team Member</DialogTitle>
               <DialogDescription>
-                Send an invitation to join your organization. They will receive an email with instructions.
+                Send an invitation to join your organization.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">

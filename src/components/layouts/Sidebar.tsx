@@ -1,4 +1,3 @@
-// src/components/layouts/Sidebar.tsx
 'use client';
 
 import Link from 'next/link';
@@ -11,7 +10,6 @@ import {
   ActivityIcon, 
   SettingsIcon,
   BellIcon,
-  SearchIcon,
   LogOutIcon
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -21,12 +19,12 @@ import { ThemeToggle } from '@/components/ui/theme-toggle';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboardIcon },
-  { name: 'Projects', href: '/dashboard/projects', icon: FolderIcon },
-  { name: 'Tasks', href: '/dashboard/tasks', icon: CheckSquareIcon },
-  { name: 'Team', href: '/dashboard/members', icon: UsersIcon },
-  { name: 'Activity', href: '/dashboard/activity', icon: ActivityIcon },
-  { name: 'Notifications', href: '/dashboard/notifications', icon: BellIcon },
-  { name: 'Settings', href: '/dashboard/settings', icon: SettingsIcon },
+  { name: 'Projects', href: '/projects', icon: FolderIcon },
+  { name: 'Tasks', href: '/tasks', icon: CheckSquareIcon },
+  { name: 'Team', href: '/members', icon: UsersIcon },
+  { name: 'Activity', href: '/activity', icon: ActivityIcon },
+  { name: 'Notifications', href: '/notifications', icon: BellIcon },
+  { name: 'Settings', href: '/settings', icon: SettingsIcon },
 ];
 
 export function Sidebar() {
@@ -39,7 +37,7 @@ export function Sidebar() {
           <div className="h-8 w-8 rounded-lg bg-gradient-to-r from-primary to-primary/60 flex items-center justify-center">
             <span className="text-white font-bold text-lg">P</span>
           </div>
-          <span className="font-bold text-xl gradient-text">ProjectFlow</span>
+          <span className="font-bold text-xl">ProjectFlow</span>
         </Link>
       </div>
       

@@ -9,12 +9,24 @@ import { Sidebar } from './Sidebar';
 import { NotificationBell } from '@/components/features/notifications/NotificationBell';
 import { UserNav } from './UserNav';
 import { SearchBar } from '@/components/features/search/SearchBar';
-import { useAuthContext } from '@/providers/AuthProvider';
-import { Skeleton } from '@/components/ui/skeleton';
 
-export function Header() {
+interface HeaderProps {
+  user?: {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    avatarUrl?: string | null;
+  } | null;
+}
+
+export function Header({ user }: HeaderProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { user, isLoading } = useAuthContext();
+
+  // Don't render if no user (will be handled by parent loading state)
+  if (!user) {
+    return null;
+  }
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -38,11 +50,7 @@ export function Header() {
         
         <div className="flex items-center gap-2">
           <NotificationBell />
-          {isLoading ? (
-            <Skeleton className="h-8 w-8 rounded-full" />
-          ) : (
-            <UserNav user={user} />
-          )}
+          <UserNav user={user} />
         </div>
       </div>
     </header>

@@ -1,9 +1,7 @@
+// src/app/layout.tsx
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { ThemeProvider } from '@/providers/ThemeProvider';
-import { AuthProvider } from '@/providers/AuthProvider';
-import { QueryProvider } from '@/providers/QueryProvider';
-import { SocketProvider } from '@/providers/SocketProvider';
 import { ToastProvider } from '@/providers/ToastProvider';
 import './globals.css';
 
@@ -21,17 +19,16 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
-        <ThemeProvider>
-          <AuthProvider>
-            <QueryProvider>
-              <SocketProvider>
-                <ToastProvider>
-                  {children}
-                </ToastProvider>
-              </SocketProvider>
-            </QueryProvider>
-          </AuthProvider>
+      <body className={inter.className} suppressHydrationWarning>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <ToastProvider>
+            {children}
+          </ToastProvider>
         </ThemeProvider>
       </body>
     </html>

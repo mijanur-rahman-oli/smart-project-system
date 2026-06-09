@@ -37,13 +37,13 @@ import { logoutAction } from '@/server/actions/auth.actions';
 import { toast } from 'sonner';
 
 interface UserNavProps {
-  user?: {
+  user: {
     id: string;
     name: string;
     email: string;
     role: string;
     avatarUrl?: string | null;
-  } | null;
+  };
 }
 
 export function UserNav({ user }: UserNavProps) {
@@ -52,7 +52,6 @@ export function UserNav({ user }: UserNavProps) {
   const [isLoading, setIsLoading] = useState(false);
 
   const getInitials = (name: string) => {
-    if (!name) return 'U';
     return name
       .split(' ')
       .map(word => word[0])
@@ -64,14 +63,9 @@ export function UserNav({ user }: UserNavProps) {
   const handleLogout = async () => {
     setIsLoading(true);
     try {
-      const result = await logoutAction();
-      if (result.success) {
-        toast.success(result.message);
-        router.push('/login');
-        router.refresh();
-      } else {
-        toast.error(result.error);
-      }
+      await logoutAction();
+      router.push('/login');
+      router.refresh();
     } catch (error) {
       toast.error('Failed to logout');
     } finally {
@@ -89,19 +83,6 @@ export function UserNav({ user }: UserNavProps) {
         return <User className="h-3 w-3 text-gray-500" />;
     }
   };
-
-  // If no user is provided, show a loading state or return null
-  if (!user) {
-    return (
-      <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-        <Avatar className="h-8 w-8">
-          <AvatarFallback className="bg-primary/10 text-primary">
-            <User className="h-4 w-4" />
-          </AvatarFallback>
-        </Avatar>
-      </Button>
-    );
-  }
 
   return (
     <DropdownMenu>
@@ -125,7 +106,7 @@ export function UserNav({ user }: UserNavProps) {
             <div className="flex items-center gap-1 mt-1">
               {getRoleBadge(user.role)}
               <span className="text-xs capitalize text-muted-foreground">
-                {user.role?.replace('_', ' ') || 'Member'}
+                {user.role.replace('_', ' ')}
               </span>
             </div>
           </div>

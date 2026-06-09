@@ -1,7 +1,7 @@
 // src/providers/AuthProvider.tsx
 'use client';
 
-import { createContext, useContext, ReactNode, useEffect } from 'react';
+import { createContext, useContext, useEffect, ReactNode } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter, usePathname } from 'next/navigation';
 
@@ -17,29 +17,39 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/reset-password'];
+const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/reset-password', '/invite'];
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const auth = useAuth();
+  const { user, isLoading, isAuthenticated, login, register, logout, demoLogin, checkAuth } = useAuth();
 
   useEffect(() => {
-    // Only redirect after auth is initialized
-    if (!auth.isLoading) {
-      // If not authenticated and on a protected page
-      if (!auth.isAuthenticated && !PUBLIC_PATHS.includes(pathname || '')) {
-        router.push(`/login?redirect=${pathname}`);
-      }
-      // If authenticated and on a public page
-      if (auth.isAuthenticated && PUBLIC_PATHS.includes(pathname || '')) {
-        router.push('/dashboard');
-      }
+    checkAuth();
+  }, []);
+
+  useEffect(() => {
+    // Redirect logic
+    if (!isLoading && !isAuthenticated && !PUBLIC_PATHS.includes(pathname || '')) {
+      router.push(`/login?redirect=${pathname}`);
     }
-  }, [auth.isLoading, auth.isAuthenticated, pathname, router]);
+    if (isAuthenticated && PUBLIC_PATHS.includes(pathname || '')) {
+      router.push('/dashboard');
+    }
+  }, [isAuthenticated, isLoading, pathname, router]);
 
   return (
-    <AuthContext.Provider value={auth}>
+    <AuthContext.Provider
+      value={{
+        user,
+        isLoading,
+        isAuthenticated,
+        login,
+        register,
+        logout,
+        demoLogin,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

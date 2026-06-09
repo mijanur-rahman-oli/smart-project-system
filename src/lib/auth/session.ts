@@ -4,7 +4,8 @@ import { verifyJWT, JWTPayload } from './jwt';
 import { prisma } from '@/lib/db/prisma';
 
 export async function getSession(): Promise<JWTPayload | null> {
-  const token = cookies().get('auth-token')?.value;
+  const cookieStore = await cookies();
+  const token = cookieStore.get('auth-token')?.value;
   if (!token) return null;
   
   try {
@@ -41,14 +42,6 @@ export async function requireAuth() {
   return user;
 }
 
-export async function requireRole(roles: string[]) {
-  const user = await requireAuth();
-  if (!roles.includes(user.role)) {
-    throw new Error('Insufficient permissions');
-  }
-  return user;
-}
-
 export async function checkProjectAccess(projectId: string, userId: string): Promise<boolean> {
   const project = await prisma.project.findFirst({
     where: {
@@ -60,4 +53,12 @@ export async function checkProjectAccess(projectId: string, userId: string): Pro
     },
   });
   return !!project;
+}
+
+export async function requireRole(roles: string[]) {
+  const user = await requireAuth();
+  if (!roles.includes(user.role)) {
+    throw new Error('Insufficient permissions');
+  }
+  return user;
 }

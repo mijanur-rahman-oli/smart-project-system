@@ -3,25 +3,123 @@
 
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/db/prisma';
-import { createProjectSchema, updateProjectSchema } from '@/lib/validations/project.schema';
 import { getCurrentUser, requireAuth, requireRole } from '@/lib/auth/session';
 import { logActivity } from '@/server/services/activity.service';
 import { z } from 'zod';
 
+const createProjectSchema = z.object({
+  name: z.string().min(3).max(100),
+  description: z.string().max(500).optional().nullable(),
+  deadline: z.string().datetime(),
+  status: z.enum(['active', 'completed', 'on_hold']).default('active'),
+});
+
+const updateProjectSchema = createProjectSchema.partial();
+
+export async function getProjectsAction(formData: FormData) {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: 'Unauthorized' };
+    }
+
+    const status = formData.get('status') as string;
+    const search = formData.get('search') as string;
+
+    const where: any = {};
+    if (user.role !== 'admin') {
+      where.OR = [
+        { createdBy: user.id },
+        { members: { some: { userId: user.id } } },
+      ];
+    }
+    if (status && status !== 'all') where.status = status;
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
+    const projects = await prisma.project.findMany({
+      where,
+      include: {
+        creator: { select: { id: true, name: true, email: true } },
+        _count: { select: { tasks: true, members: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return { success: true, data: projects };
+  } catch (error) {
+    console.error('Get projects error:', error);
+    return { success: false, error: 'Failed to fetch projects' };
+  }
+}
+
+export async function getProjectAction(projectId: string) {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: 'Unauthorized' };
+    }
+
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      include: {
+        creator: { select: { id: true, name: true, email: true, avatarUrl: true } },
+        members: {
+          include: {
+            user: { select: { id: true, name: true, email: true, avatarUrl: true, role: true } },
+          },
+        },
+        tasks: {
+          include: {
+            assignee: { select: { id: true, name: true, email: true, avatarUrl: true } },
+            _count: { select: { comments: true, attachments: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+        },
+        _count: { select: { tasks: true, members: true } },
+      },
+    });
+
+    if (!project) {
+      return { success: false, error: 'Project not found' };
+    }
+
+    const hasAccess = project.createdBy === user.id ||
+      project.members.some(m => m.userId === user.id) ||
+      user.role === 'admin';
+
+    if (!hasAccess) {
+      return { success: false, error: 'Access denied' };
+    }
+
+    return { success: true, data: project };
+  } catch (error) {
+    console.error('Get project error:', error);
+    return { success: false, error: 'Failed to fetch project' };
+  }
+}
+
 export async function createProjectAction(formData: FormData) {
   try {
     const user = await requireAuth();
-    await requireRole(['admin', 'project_manager']);
+    
+    if (!['admin', 'project_manager'].includes(user.role)) {
+      return { success: false, error: 'Insufficient permissions' };
+    }
 
-    const validatedData = createProjectSchema.parse({
+    const validated = createProjectSchema.parse({
       name: formData.get('name'),
       description: formData.get('description') || null,
-      deadline: formData.get('deadline') ? new Date(formData.get('deadline') as string) : null,
+      deadline: formData.get('deadline'),
       status: formData.get('status') || 'active',
     });
 
     const existingProject = await prisma.project.findFirst({
-      where: { name: validatedData.name },
+      where: { name: validated.name },
     });
 
     if (existingProject) {
@@ -30,13 +128,12 @@ export async function createProjectAction(formData: FormData) {
 
     const project = await prisma.project.create({
       data: {
-        name: validatedData.name,
-        description: validatedData.description,
-        deadline: validatedData.deadline,
-        status: validatedData.status,
+        name: validated.name,
+        description: validated.description,
+        deadline: new Date(validated.deadline),
+        status: validated.status,
         createdBy: user.id,
       },
-      include: { creator: { select: { id: true, name: true, email: true } } },
     });
 
     await prisma.projectMember.create({
@@ -66,38 +163,37 @@ export async function updateProjectAction(formData: FormData) {
     const user = await requireAuth();
     const projectId = formData.get('id') as string;
 
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      include: { members: true },
-    });
-
+    const project = await prisma.project.findUnique({ where: { id: projectId } });
     if (!project) return { success: false, error: 'Project not found' };
 
     const isAuthorized = user.role === 'admin' || project.createdBy === user.id;
     if (!isAuthorized) {
-      return { success: false, error: 'You do not have permission to update this project' };
+      return { success: false, error: 'Insufficient permissions' };
     }
 
-    const validatedData = updateProjectSchema.parse({
-      id: projectId,
+    const validated = updateProjectSchema.parse({
       name: formData.get('name') || undefined,
       description: formData.get('description') || null,
-      deadline: formData.get('deadline') ? new Date(formData.get('deadline') as string) : undefined,
+      deadline: formData.get('deadline') || undefined,
       status: formData.get('status') || undefined,
     });
 
-    if (validatedData.name && validatedData.name !== project.name) {
+    if (validated.name && validated.name !== project.name) {
       const duplicate = await prisma.project.findFirst({
-        where: { name: validatedData.name, id: { not: projectId } },
+        where: { name: validated.name, id: { not: projectId } },
       });
       if (duplicate) {
-        return { success: false, error: 'A project with this name already exists' };
+        return { success: false, error: 'Project name already exists' };
       }
     }
 
     const updatedProject = await prisma.project.update({
       where: { id: projectId },
-      data: { ...validatedData, updatedAt: new Date() },
+      data: {
+        ...validated,
+        deadline: validated.deadline ? new Date(validated.deadline) : undefined,
+        updatedAt: new Date(),
+      },
     });
 
     await logActivity({
@@ -105,7 +201,7 @@ export async function updateProjectAction(formData: FormData) {
       action: 'PROJECT_UPDATED',
       entityType: 'project',
       entityId: projectId,
-      metadata: { changes: validatedData, projectName: project.name },
+      metadata: { projectName: project.name },
     });
 
     revalidatePath(`/dashboard/projects/${projectId}`);
@@ -127,7 +223,7 @@ export async function deleteProjectAction(projectId: string) {
 
     const isAuthorized = user.role === 'admin' || project.createdBy === user.id;
     if (!isAuthorized) {
-      return { success: false, error: 'Only admins or project creators can delete projects' };
+      return { success: false, error: 'Insufficient permissions' };
     }
 
     await logActivity({
@@ -147,30 +243,83 @@ export async function deleteProjectAction(projectId: string) {
   }
 }
 
-export async function getProjectAction(projectId: string) {
+export async function addProjectMemberAction(formData: FormData) {
+  try {
+    const user = await requireAuth();
+    const projectId = formData.get('projectId') as string;
+    const email = formData.get('email') as string;
+
+    const project = await prisma.project.findUnique({ where: { id: projectId } });
+    if (!project) return { success: false, error: 'Project not found' };
+
+    const isAuthorized = user.role === 'admin' || project.createdBy === user.id;
+    if (!isAuthorized) {
+      return { success: false, error: 'Insufficient permissions' };
+    }
+
+    const userToAdd = await prisma.user.findUnique({ where: { email } });
+    if (!userToAdd) {
+      return { success: false, error: 'User not found' };
+    }
+
+    const existingMember = await prisma.projectMember.findFirst({
+      where: { projectId, userId: userToAdd.id },
+    });
+
+    if (existingMember) {
+      return { success: false, error: 'User is already a member' };
+    }
+
+    await prisma.projectMember.create({
+      data: { projectId, userId: userToAdd.id },
+    });
+
+    await logActivity({
+      userId: user.id,
+      action: 'MEMBER_ADDED',
+      entityType: 'project',
+      entityId: projectId,
+      metadata: { addedUser: email },
+    });
+
+    revalidatePath(`/dashboard/projects/${projectId}/members`);
+    return { success: true, message: 'Member added successfully' };
+  } catch (error) {
+    return { success: false, error: 'Failed to add member' };
+  }
+}
+
+export async function removeProjectMemberAction(projectId: string, userId: string) {
   try {
     const user = await requireAuth();
 
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      include: {
-        creator: { select: { id: true, name: true, email: true, avatarUrl: true } },
-        members: { include: { user: { select: { id: true, name: true, email: true, avatarUrl: true, role: true } } } },
-        tasks: { include: { assignee: true, comments: true }, orderBy: { createdAt: 'desc' } },
-        _count: { select: { tasks: true, members: true } },
-      },
-    });
-
+    const project = await prisma.project.findUnique({ where: { id: projectId } });
     if (!project) return { success: false, error: 'Project not found' };
 
-    const hasAccess = project.createdBy === user.id ||
-      project.members.some(m => m.userId === user.id) ||
-      user.role === 'admin';
+    if (project.createdBy === userId) {
+      return { success: false, error: 'Cannot remove project creator' };
+    }
 
-    if (!hasAccess) return { success: false, error: 'Access denied' };
+    const isAuthorized = user.role === 'admin' || project.createdBy === user.id;
+    if (!isAuthorized) {
+      return { success: false, error: 'Insufficient permissions' };
+    }
 
-    return { success: true, data: project };
+    await prisma.projectMember.delete({
+      where: { projectId_userId: { projectId, userId } },
+    });
+
+    await logActivity({
+      userId: user.id,
+      action: 'MEMBER_REMOVED',
+      entityType: 'project',
+      entityId: projectId,
+      metadata: { removedUserId: userId },
+    });
+
+    revalidatePath(`/dashboard/projects/${projectId}/members`);
+    return { success: true, message: 'Member removed successfully' };
   } catch (error) {
-    return { success: false, error: 'Failed to fetch project' };
+    return { success: false, error: 'Failed to remove member' };
   }
 }

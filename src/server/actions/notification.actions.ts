@@ -86,6 +86,21 @@ export async function archiveNotification(notificationId: string) {
   }
 }
 
+export async function deleteNotification(notificationId: string) {
+  try {
+    const user = await requireAuth();
+
+    await prisma.notification.deleteMany({
+      where: { id: notificationId, userId: user.id },
+    });
+
+    revalidatePath('/dashboard/notifications');
+    return { success: true, message: 'Notification deleted' };
+  } catch (error) {
+    return { success: false, error: 'Failed to delete notification' };
+  }
+}
+
 export async function getNotificationPreferences() {
   try {
     const user = await getCurrentUser();

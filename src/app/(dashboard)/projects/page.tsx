@@ -3,18 +3,15 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { PlusIcon, SearchIcon, FilterIcon, LayoutGridIcon, ListIcon, RefreshCwIcon } from 'lucide-react';
+import { PlusIcon, SearchIcon, LayoutGridIcon, ListIcon, RefreshCwIcon, FolderIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
-import { toast } from 'sonner';
 import { getProjectsAction } from '@/server/actions/project.actions';
 import { ProjectCard } from '@/components/features/projects/ProjectCard';
 import { ProjectListSkeleton } from '@/components/ui/skeleton-loader';
+import { toast } from 'sonner';
 
 interface Project {
   id: string;
@@ -40,21 +37,16 @@ export default function ProjectsPage() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<string>('createdAt');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   useEffect(() => {
     fetchProjects();
-  }, [statusFilter, sortBy, sortOrder]);
+  }, [statusFilter]);
 
   const fetchProjects = async () => {
     setLoading(true);
     try {
       const formData = new FormData();
       formData.append('status', statusFilter);
-      formData.append('sortBy', sortBy);
-      formData.append('sortOrder', sortOrder);
-      
       const result = await getProjectsAction(formData);
       if (result.success) {
         setProjects(result.data);
@@ -147,29 +139,6 @@ export default function ProjectsPage() {
             </SelectContent>
           </Select>
 
-          {/* Sort By */}
-          <Select value={sortBy} onValueChange={setSortBy}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Sort by" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="createdAt">Date Created</SelectItem>
-              <SelectItem value="name">Project Name</SelectItem>
-              <SelectItem value="deadline">Deadline</SelectItem>
-              <SelectItem value="updatedAt">Last Updated</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* Sort Order */}
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
-            className="shrink-0"
-          >
-            {sortOrder === 'desc' ? '↓' : '↑'}
-          </Button>
-
           {/* View Toggle */}
           <div className="flex gap-1 border rounded-md p-1">
             <Button
@@ -191,7 +160,7 @@ export default function ProjectsPage() {
           </div>
 
           {/* Refresh */}
-          <Button variant="outline" size="icon" onClick={fetchProjects} className="shrink-0">
+          <Button variant="outline" size="icon" onClick={fetchProjects}>
             <RefreshCwIcon className="h-4 w-4" />
           </Button>
         </div>
@@ -291,4 +260,4 @@ function ProjectListItem({ project, onUpdate }: { project: Project; onUpdate: ()
   );
 }
 
-import { FolderIcon } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';

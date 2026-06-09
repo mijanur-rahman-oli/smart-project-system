@@ -30,8 +30,8 @@ export function TaskFilters({ filters, onFiltersChange, onClearFilters, members 
   const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>(filters.dateRange);
 
   const activeFilterCount = [
-    filters.status,
-    filters.priority,
+    filters.status !== 'all',
+    filters.priority !== 'all',
     filters.assignedTo,
     filters.dateRange.from,
   ].filter(Boolean).length;
@@ -65,7 +65,7 @@ export function TaskFilters({ filters, onFiltersChange, onClearFilters, members 
             <SelectValue placeholder="All Status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All Status</SelectItem>
+            <SelectItem value="all">All Status</SelectItem>
             <SelectItem value="todo">To Do</SelectItem>
             <SelectItem value="in_progress">In Progress</SelectItem>
             <SelectItem value="completed">Completed</SelectItem>
@@ -78,7 +78,7 @@ export function TaskFilters({ filters, onFiltersChange, onClearFilters, members 
             <SelectValue placeholder="All Priority" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All Priority</SelectItem>
+            <SelectItem value="all">All Priority</SelectItem>
             <SelectItem value="high">High</SelectItem>
             <SelectItem value="medium">Medium</SelectItem>
             <SelectItem value="low">Low</SelectItem>
@@ -87,12 +87,12 @@ export function TaskFilters({ filters, onFiltersChange, onClearFilters, members 
 
         {/* Assignee Filter */}
         {members.length > 0 && (
-          <Select value={filters.assignedTo} onValueChange={(value) => onFiltersChange({ ...filters, assignedTo: value })}>
+          <Select value={filters.assignedTo || "all"} onValueChange={(value) => onFiltersChange({ ...filters, assignedTo: value === "all" ? "" : value })}>
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="All Assignees" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All Assignees</SelectItem>
+              <SelectItem value="all">All Assignees</SelectItem>
               {members.map((member) => (
                 <SelectItem key={member.id} value={member.id}>
                   {member.name}
@@ -150,16 +150,16 @@ export function TaskFilters({ filters, onFiltersChange, onClearFilters, members 
       {/* Active Filters Display */}
       {activeFilterCount > 0 && (
         <div className="flex flex-wrap gap-2 pt-2">
-          {filters.status && (
+          {filters.status && filters.status !== 'all' && (
             <Badge variant="secondary" className="gap-1">
               Status: {filters.status.replace('_', ' ')}
-              <X className="h-3 w-3 cursor-pointer" onClick={() => onFiltersChange({ ...filters, status: '' })} />
+              <X className="h-3 w-3 cursor-pointer" onClick={() => onFiltersChange({ ...filters, status: 'all' })} />
             </Badge>
           )}
-          {filters.priority && (
+          {filters.priority && filters.priority !== 'all' && (
             <Badge variant="secondary" className="gap-1">
               Priority: {filters.priority}
-              <X className="h-3 w-3 cursor-pointer" onClick={() => onFiltersChange({ ...filters, priority: '' })} />
+              <X className="h-3 w-3 cursor-pointer" onClick={() => onFiltersChange({ ...filters, priority: 'all' })} />
             </Badge>
           )}
           {filters.assignedTo && members.find(m => m.id === filters.assignedTo) && (

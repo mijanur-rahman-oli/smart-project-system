@@ -4,89 +4,23 @@
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/db/prisma';
 import { requireAuth, requireRole } from '@/lib/auth/session';
-import { updateUserSchema } from '@/lib/validations/user.schema';
 import { hashPassword } from '@/lib/auth/password';
 import { logActivity } from '@/server/services/activity.service';
+import { sendEmail } from '@/server/services/email.service';
 import { z } from 'zod';
 
-export async function updateUserAction(formData: FormData) {
-  try {
-    const currentUser = await requireAuth();
-    const userId = formData.get('id') as string;
+const updateUserSchema = z.object({
+  name: z.string().min(2).max(100).optional(),
+  email: z.string().email().optional(),
+  role: z.enum(['admin', 'project_manager', 'team_member']).optional(),
+  avatarUrl: z.string().url().nullable().optional(),
+  bio: z.string().max(500).optional(),
+});
 
-    if (currentUser.id !== userId && currentUser.role !== 'admin') {
-      return { success: false, error: 'Access denied' };
-    }
-
-    const validatedData = updateUserSchema.parse({
-      name: formData.get('name') || undefined,
-      email: formData.get('email') || undefined,
-      bio: formData.get('bio') || undefined,
-    });
-
-    if (validatedData.email) {
-      const existing = await prisma.user.findFirst({
-        where: { email: validatedData.email, id: { not: userId } },
-      });
-      if (existing) return { success: false, error: 'Email already in use' };
-    }
-
-    const updatedUser = await prisma.user.update({
-      where: { id: userId },
-      data: validatedData,
-      select: { id: true, name: true, email: true, role: true, avatarUrl: true, bio: true },
-    });
-
-    await logActivity({
-      userId: currentUser.id,
-      action: 'USER_UPDATED',
-      entityType: 'user',
-      entityId: userId,
-      metadata: { updatedFields: Object.keys(validatedData) },
-    });
-
-    revalidatePath('/dashboard/settings');
-    return { success: true, data: updatedUser, message: 'Profile updated successfully' };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return { success: false, error: error.errors[0].message };
-    }
-    return { success: false, error: 'Failed to update profile' };
-  }
-}
-
-export async function changePasswordAction(formData: FormData) {
-  try {
-    const user = await requireAuth();
-    const currentPassword = formData.get('currentPassword') as string;
-    const newPassword = formData.get('newPassword') as string;
-
-    const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
-    if (!dbUser) return { success: false, error: 'User not found' };
-
-    const bcrypt = await import('bcryptjs');
-    const isValid = await bcrypt.compare(currentPassword, dbUser.passwordHash);
-    if (!isValid) return { success: false, error: 'Current password is incorrect' };
-
-    const hashedPassword = await hashPassword(newPassword);
-
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { passwordHash: hashedPassword },
-    });
-
-    await logActivity({
-      userId: user.id,
-      action: 'PASSWORD_CHANGED',
-      entityType: 'user',
-      entityId: user.id,
-    });
-
-    return { success: true, message: 'Password changed successfully' };
-  } catch (error) {
-    return { success: false, error: 'Failed to change password' };
-  }
-}
+const inviteUserSchema = z.object({
+  email: z.string().email(),
+  role: z.enum(['admin', 'project_manager', 'team_member']).default('team_member'),
+});
 
 export async function getUsersAction(filters: { role?: string; search?: string }) {
   try {
@@ -96,7 +30,7 @@ export async function getUsersAction(filters: { role?: string; search?: string }
     }
 
     const where: any = {};
-    if (filters.role) where.role = filters.role;
+    if (filters.role && filters.role !== 'all') where.role = filters.role;
     if (filters.search) {
       where.OR = [
         { name: { contains: filters.search, mode: 'insensitive' } },
@@ -115,12 +49,150 @@ export async function getUsersAction(filters: { role?: string; search?: string }
         isActive: true,
         lastLoginAt: true,
         createdAt: true,
+        _count: {
+          select: {
+            projectsCreated: true,
+            assignedTasks: true,
+            comments: true,
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
 
     return { success: true, data: users };
   } catch (error) {
+    console.error('Get users error:', error);
     return { success: false, error: 'Failed to fetch users' };
+  }
+}
+
+export async function updateUserRoleAction(userId: string, newRole: string) {
+  try {
+    const currentUser = await requireAuth();
+    if (currentUser.role !== 'admin') {
+      return { success: false, error: 'Insufficient permissions' };
+    }
+
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: { role: newRole as any },
+      select: { id: true, name: true, email: true, role: true },
+    });
+
+    await logActivity({
+      userId: currentUser.id,
+      action: 'USER_ROLE_UPDATED',
+      entityType: 'user',
+      entityId: userId,
+      metadata: { newRole, targetUser: user.email },
+    });
+
+    revalidatePath('/dashboard/members');
+    return { success: true, data: user, message: 'User role updated successfully' };
+  } catch (error) {
+    console.error('Update user role error:', error);
+    return { success: false, error: 'Failed to update user role' };
+  }
+}
+
+export async function inviteUserAction(formData: FormData) {
+  try {
+    const currentUser = await requireAuth();
+    if (currentUser.role !== 'admin') {
+      return { success: false, error: 'Insufficient permissions' };
+    }
+
+    const email = formData.get('email') as string;
+    const role = formData.get('role') as string || 'team_member';
+
+    const validated = inviteUserSchema.parse({ email, role });
+
+    // Check if user already exists
+    const existingUser = await prisma.user.findUnique({
+      where: { email: validated.email },
+    });
+
+    if (existingUser) {
+      return { success: false, error: 'User with this email already exists' };
+    }
+
+    // Generate temporary password
+    const tempPassword = Math.random().toString(36).slice(-8) + '!Aa1';
+    const hashedPassword = await hashPassword(tempPassword);
+
+    const newUser = await prisma.user.create({
+      data: {
+        email: validated.email,
+        name: validated.email.split('@')[0],
+        passwordHash: hashedPassword,
+        role: validated.role as any,
+        isActive: true,
+      },
+    });
+
+    // Send invitation email
+    await sendEmail({
+      to: validated.email,
+      subject: 'Invitation to join ProjectFlow',
+      html: `
+        <h2>Welcome to ProjectFlow!</h2>
+        <p>You have been invited to join ProjectFlow as a ${validated.role}.</p>
+        <p>Your temporary password is: <strong>${tempPassword}</strong></p>
+        <p>Please login and change your password immediately.</p>
+        <a href="${process.env.NEXT_PUBLIC_APP_URL}/login">Click here to login</a>
+      `,
+    });
+
+    await logActivity({
+      userId: currentUser.id,
+      action: 'USER_INVITED',
+      entityType: 'user',
+      entityId: newUser.id,
+      metadata: { invitedEmail: validated.email, role: validated.role },
+    });
+
+    revalidatePath('/dashboard/members');
+    return { success: true, message: 'Invitation sent successfully' };
+  } catch (error) {
+    console.error('Invite user error:', error);
+    if (error instanceof z.ZodError) {
+      return { success: false, error: error.errors[0].message };
+    }
+    return { success: false, error: 'Failed to send invitation' };
+  }
+}
+
+export async function deleteUserAction(userId: string) {
+  try {
+    const currentUser = await requireAuth();
+    if (currentUser.role !== 'admin') {
+      return { success: false, error: 'Insufficient permissions' };
+    }
+
+    if (currentUser.id === userId) {
+      return { success: false, error: 'Cannot delete your own account' };
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      return { success: false, error: 'User not found' };
+    }
+
+    await prisma.user.delete({ where: { id: userId } });
+
+    await logActivity({
+      userId: currentUser.id,
+      action: 'USER_DELETED',
+      entityType: 'user',
+      entityId: userId,
+      metadata: { deletedUser: user.email },
+    });
+
+    revalidatePath('/dashboard/members');
+    return { success: true, message: 'User deleted successfully' };
+  } catch (error) {
+    console.error('Delete user error:', error);
+    return { success: false, error: 'Failed to delete user' };
   }
 }
