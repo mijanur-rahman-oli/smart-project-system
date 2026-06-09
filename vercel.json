@@ -21,23 +21,5 @@
         { "key": "Access-Control-Allow-Headers", "value": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version" }
       ]
     }
-  ],
-  "crons": [
-    {
-      "path": "/api/cron/cleanup-logs",
-      "schedule": "0 0 * * *" 
-    },
-    {
-      "path": "/api/cron/deadline-reminders",
-      "schedule": "0 9 * * *"
-    }
-  ],
-  "env": {
-    "NODE_ENV": "production",
-    "DATABASE_URL": "@database-url",
-    "JWT_SECRET": "@jwt-secret",
-    "SMTP_USER": "@smtp-user",
-    "SMTP_PASS": "@smtp-pass",
-    "BLOB_READ_WRITE_TOKEN": "@blob-token"
-  }
+  ]
 }
