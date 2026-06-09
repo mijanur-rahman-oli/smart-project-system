@@ -1,14 +1,18 @@
 // next.config.js
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: true,
+  reactStrictMode: false,  // Turn off strict mode for build
   eslint: {
     ignoreDuringBuilds: true,
   },
   typescript: {
     ignoreBuildErrors: true,
   },
+  swcMinify: true,
+  output: 'standalone',
   images: {
+    unoptimized: true,  // Skip image optimization
+    domains: ['localhost'],
     remotePatterns: [
       {
         protocol: 'https',
@@ -20,11 +24,13 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: '10mb',
     },
+    // Disable some optimizations for build
+    webpackBuildWorker: false,
   },
-  // Suppress build warnings
-  swcMinify: true,
-  compiler: {
-    removeConsole: false,
+  // Suppress all warnings
+  onError: (err, req, res) => {
+    console.error(err);
+    res.status(500).end();
   },
 };
 

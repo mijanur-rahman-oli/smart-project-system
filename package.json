@@ -6,8 +6,8 @@
   "author": "ProjectFlow Team",
   "license": "MIT",
   "scripts": {
-   "dev": "next dev",
-    "build": "next build --no-lint",
+       "build": "next build",
+    "dev": "next dev",
     "start": "next start",
     "lint": "next lint --fix",
     "type-check": "tsc --noEmit --skipLibCheck",
