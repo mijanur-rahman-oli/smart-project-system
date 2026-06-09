@@ -3,15 +3,35 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { PlusIcon, SearchIcon, LayoutGridIcon, ListIcon, RefreshCwIcon, FolderIcon } from 'lucide-react';
+import { 
+  PlusIcon, 
+  SearchIcon, 
+  LayoutGridIcon, 
+  ListIcon, 
+  RefreshCwIcon, 
+  FolderIcon,
+  EyeIcon,
+  EditIcon,
+  TrashIcon
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { getProjectsAction } from '@/server/actions/project.actions';
-import { ProjectCard } from '@/components/features/projects/ProjectCard';
+import { getProjectsAction, deleteProjectAction } from '@/server/actions/project.actions';
 import { ProjectListSkeleton } from '@/components/ui/skeleton-loader';
 import { toast } from 'sonner';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface Project {
   id: string;
@@ -37,6 +57,8 @@ export default function ProjectsPage() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     fetchProjects();
@@ -60,6 +82,26 @@ export default function ProjectsPage() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!projectToDelete) return;
+    
+    setIsDeleting(true);
+    try {
+      const result = await deleteProjectAction(projectToDelete.id);
+      if (result.success) {
+        toast.success(result.message);
+        fetchProjects();
+        setProjectToDelete(null);
+      } else {
+        toast.error(result.error);
+      }
+    } catch (error) {
+      toast.error('Failed to delete project');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const filteredProjects = projects.filter(project =>
     project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     project.description?.toLowerCase().includes(searchQuery.toLowerCase())
@@ -68,6 +110,15 @@ export default function ProjectsPage() {
   const getStatusCount = (status: string) => {
     if (status === 'all') return projects.length;
     return projects.filter(p => p.status === status).length;
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'active': return 'bg-green-500/10 text-green-500';
+      case 'completed': return 'bg-blue-500/10 text-blue-500';
+      case 'on_hold': return 'bg-yellow-500/10 text-yellow-500';
+      default: return '';
+    }
   };
 
   return (
@@ -80,7 +131,8 @@ export default function ProjectsPage() {
             Manage and organize your projects
           </p>
         </div>
-        <Button onClick={() => router.push('/dashboard/projects/create')} className="gap-2">
+        {/* UPDATED: Link to working create-project route */}
+        <Button onClick={() => router.push('/create-project')} className="gap-2">
           <PlusIcon className="h-4 w-4" />
           New Project
         </Button>
@@ -115,7 +167,6 @@ export default function ProjectsPage() {
       {/* Filters and Search */}
       <Card className="p-4">
         <div className="flex flex-col md:flex-row gap-4">
-          {/* Search */}
           <div className="flex-1 relative">
             <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -126,7 +177,6 @@ export default function ProjectsPage() {
             />
           </div>
 
-          {/* Status Filter */}
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Filter by status" />
@@ -139,7 +189,6 @@ export default function ProjectsPage() {
             </SelectContent>
           </Select>
 
-          {/* View Toggle */}
           <div className="flex gap-1 border rounded-md p-1">
             <Button
               variant={viewMode === 'grid' ? 'default' : 'ghost'}
@@ -159,7 +208,6 @@ export default function ProjectsPage() {
             </Button>
           </div>
 
-          {/* Refresh */}
           <Button variant="outline" size="icon" onClick={fetchProjects}>
             <RefreshCwIcon className="h-4 w-4" />
           </Button>
@@ -194,7 +242,8 @@ export default function ProjectsPage() {
                 Clear Filters
               </Button>
             ) : (
-              <Button onClick={() => router.push('/dashboard/projects/create')}>
+              // UPDATED: Link to working create-project route
+              <Button onClick={() => router.push('/create-project')}>
                 <PlusIcon className="h-4 w-4 mr-2" />
                 Create Project
               </Button>
@@ -204,37 +253,142 @@ export default function ProjectsPage() {
       ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredProjects.map((project) => (
-            <ProjectCard key={project.id} project={project} onUpdate={fetchProjects} />
+            <ProjectCard 
+              key={project.id} 
+              project={project} 
+              onDelete={() => setProjectToDelete(project)}
+              onView={() => router.push(`/projects/${project.id}`)}
+              onEdit={() => router.push(`/projects/${project.id}/edit`)}
+            />
           ))}
         </div>
       ) : (
         <div className="space-y-3">
           {filteredProjects.map((project) => (
-            <ProjectListItem key={project.id} project={project} onUpdate={fetchProjects} />
+            <ProjectListItem 
+              key={project.id} 
+              project={project}
+              onDelete={() => setProjectToDelete(project)}
+              onView={() => router.push(`/projects/${project.id}`)}
+              onEdit={() => router.push(`/projects/${project.id}/edit`)}
+            />
           ))}
         </div>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!projectToDelete} onOpenChange={() => setProjectToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Project</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{projectToDelete?.name}"? This action cannot be undone.
+              All tasks, comments, and attachments will be permanently deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="bg-red-500 hover:bg-red-600"
+            >
+              {isDeleting ? 'Deleting...' : 'Delete Project'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
 
-// List Item Component
-function ProjectListItem({ project, onUpdate }: { project: Project; onUpdate: () => void }) {
-  const router = useRouter();
+// Project Card Component
+function ProjectCard({ project, onDelete, onView, onEdit }: { 
+  project: Project; 
+  onDelete: () => void;
+  onView: () => void;
+  onEdit: () => void;
+}) {
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'active': return 'bg-green-500/10 text-green-500';
+      case 'completed': return 'bg-blue-500/10 text-blue-500';
+      case 'on_hold': return 'bg-yellow-500/10 text-yellow-500';
+      default: return '';
+    }
+  };
 
   return (
-    <Card 
-      className="p-4 hover:shadow-md transition-all cursor-pointer"
-      onClick={() => router.push(`/dashboard/projects/${project.id}`)}
-    >
-      <div className="flex items-center justify-between">
+    <Card className="hover:shadow-lg transition-all cursor-pointer group">
+      <div className="p-4 space-y-3">
+        <div className="flex justify-between items-start">
+          <div className="flex-1">
+            <h3 
+              className="font-semibold text-lg hover:text-primary transition-colors"
+              onClick={onView}
+            >
+              {project.name}
+            </h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              Created by {project.creator.name}
+            </p>
+          </div>
+          <Badge className={getStatusColor(project.status)}>
+            {project.status}
+          </Badge>
+        </div>
+        
+        {project.description && (
+          <p className="text-sm text-muted-foreground line-clamp-2">
+            {project.description}
+          </p>
+        )}
+        
+        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+          <span>📋 {project._count.tasks} tasks</span>
+          <span>👥 {project._count.members} members</span>
+          <span>📅 Due {new Date(project.deadline).toLocaleDateString()}</span>
+        </div>
+        
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="ghost" size="sm" onClick={onView}>
+            <EyeIcon className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onEdit}>
+            <EditIcon className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onDelete} className="text-red-500">
+            <TrashIcon className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+// Project List Item Component
+function ProjectListItem({ project, onDelete, onView, onEdit }: { 
+  project: Project; 
+  onDelete: () => void;
+  onView: () => void;
+  onEdit: () => void;
+}) {
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'active': return 'bg-green-500/10 text-green-500';
+      case 'completed': return 'bg-blue-500/10 text-blue-500';
+      case 'on_hold': return 'bg-yellow-500/10 text-yellow-500';
+      default: return '';
+    }
+  };
+
+  return (
+    <Card className="p-4 hover:shadow-md transition-all cursor-pointer">
+      <div className="flex items-center justify-between" onClick={onView}>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3">
             <h3 className="font-semibold text-lg truncate">{project.name}</h3>
-            <Badge variant={
-              project.status === 'active' ? 'default' :
-              project.status === 'completed' ? 'secondary' : 'outline'
-            }>
+            <Badge className={getStatusColor(project.status)}>
               {project.status}
             </Badge>
           </div>
@@ -249,15 +403,18 @@ function ProjectListItem({ project, onUpdate }: { project: Project; onUpdate: ()
             <span>📅 Due {new Date(project.deadline).toLocaleDateString()}</span>
           </div>
         </div>
-        <Button variant="ghost" size="sm" onClick={(e) => {
-          e.stopPropagation();
-          router.push(`/dashboard/projects/${project.id}/edit`);
-        }}>
-          Edit
-        </Button>
+        <div className="flex items-center gap-1 ml-4" onClick={(e) => e.stopPropagation()}>
+          <Button variant="ghost" size="sm" onClick={onView}>
+            <EyeIcon className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onEdit}>
+            <EditIcon className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onDelete} className="text-red-500">
+            <TrashIcon className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
     </Card>
   );
 }
-
-import { Badge } from '@/components/ui/badge';
