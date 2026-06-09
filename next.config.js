@@ -6,7 +6,7 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
   typescript: {
-    ignoreBuildErrors: true,  // Add this to bypass TypeScript errors
+    ignoreBuildErrors: true,
   },
   images: {
     remotePatterns: [
@@ -20,6 +20,11 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: '10mb',
     },
+  },
+  // Suppress build warnings
+  swcMinify: true,
+  compiler: {
+    removeConsole: false,
   },
 };
 

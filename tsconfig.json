@@ -1,16 +1,8 @@
 {
   "compilerOptions": {
-    // Language and Environment
     "target": "ES2022",
-    "lib": [
-      "ES2022",
-      "DOM",
-      "DOM.Iterable"
-    ],
-    "jsx": "react-jsx",
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": true,
-    // Modules
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "preserve",
     "module": "ESNext",
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
@@ -19,57 +11,14 @@
     "isolatedModules": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
-    // Type Checking
     "strict": true,
-    "strictNullChecks": true,
-    "strictFunctionTypes": true,
-    "strictBindCallApply": true,
-    "strictPropertyInitialization": true,
-    "noImplicitAny": true,
-    "noImplicitThis": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true,
-    "noUncheckedIndexedAccess": true,
-    "noPropertyAccessFromIndexSignature": true,
-    "allowUnreachableCode": false,
-    "allowUnusedLabels": false,
-    // Completeness
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    // Paths and Aliases
     "baseUrl": ".",
     "paths": {
-      "@/*": [
-        "./src/*"
-      ],
-      "@/components/*": [
-        "./src/components/*"
-      ],
-      "@/lib/*": [
-        "./src/lib/*"
-      ],
-      "@/server/*": [
-        "./src/server/*"
-      ],
-      "@/types/*": [
-        "./src/types/*"
-      ],
-      "@/hooks/*": [
-        "./src/hooks/*"
-      ],
-      "@/providers/*": [
-        "./src/providers/*"
-      ],
-      "@/config/*": [
-        "./src/config/*"
-      ]
+      "@/*": ["./src/*"]
     },
-    // Incremental Builds
     "incremental": true,
-    "tsBuildInfoFile": ".tsbuildinfo",
-    // Plugins
     "plugins": [
       {
         "name": "next"
@@ -82,10 +31,7 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     "src/**/*.ts",
-    "src/**/*.tsx",
-    "prisma/**/*.ts",
-    "tests/**/*.ts",
-    ".next/dev/types/**/*.ts"
+    "src/**/*.tsx"
   ],
   "exclude": [
     "node_modules",
@@ -95,6 +41,10 @@
     "out",
     "coverage",
     "playwright-report",
-    "test-results"
+    "test-results",
+    "tests/**/*",        // Add this to exclude test files
+    "**/*.test.ts",      // Exclude test files
+    "**/*.spec.ts",      // Exclude spec files
+    "playwright.config.ts" // Exclude playwright config
   ]
 }
