@@ -1,22 +1,21 @@
 // src/server/services/activity.service.ts
 import { prisma } from '@/lib/db/prisma';
-import { headers } from 'next/headers';
 
-interface LogActivityParams {
+export async function logActivity(params: {
   userId: string;
   action: string;
   entityType: string;
   entityId: string;
-  oldValues?: Record<string, any>;
-  newValues?: Record<string, any>;
-  metadata?: Record<string, any>;
-}
-
-export async function logActivity(params: LogActivityParams) {
+  oldValues?: any;
+  newValues?: any;
+  metadata?: any;
+}) {
   try {
-    // Await headers() in Next.js 16
-    const headersList = await headers();
-    const ipAddress = headersList.get('x-forwarded-for') || headersList.get('x-real-ip');
+    // Skip activity logging if entityId is invalid
+    if (!params.entityId || params.entityId === '') {
+      console.warn('Skipping activity log - invalid entityId');
+      return;
+    }
 
     await prisma.activityLog.create({
       data: {
@@ -27,7 +26,7 @@ export async function logActivity(params: LogActivityParams) {
         oldValues: params.oldValues || {},
         newValues: params.newValues || {},
         metadata: params.metadata || {},
-        ipAddress: ipAddress || null,
+        ipAddress: null, // Vercel doesn't easily provide IP in serverless
       },
     });
   } catch (error) {
